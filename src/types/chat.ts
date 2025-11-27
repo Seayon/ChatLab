@@ -217,6 +217,27 @@ export interface HotRepeatContent {
   count: number // 被复读次数
   maxChainLength: number // 最长复读链长度
   originatorName: string // 最长链的原创者名称
+  lastTs: number // 最近一次发生的时间戳（秒）
+}
+
+/**
+ * 成员口头禅项
+ */
+export interface MemberCatchphrase {
+  memberId: number
+  platformId: string
+  name: string
+  catchphrases: Array<{
+    content: string
+    count: number
+  }>
+}
+
+/**
+ * 口头禅分析结果
+ */
+export interface CatchphraseAnalysis {
+  members: MemberCatchphrase[]
 }
 
 /**

@@ -20,6 +20,8 @@ import type {
   RepeatRateItem,
   ChainLengthDistribution,
   HotRepeatContent,
+  CatchphraseAnalysis,
+  MemberCatchphrase,
 } from '../../../src/types/chat'
 
 // 数据库存储目录
@@ -774,6 +776,7 @@ export function getRepeatAnalysis(sessionId: string, filter?: TimeFilter): Repea
           msg.id,
           msg.sender_id as senderId,
           msg.content,
+          msg.ts,
           m.platform_id as platformId,
           m.name
         FROM message msg
@@ -786,6 +789,7 @@ export function getRepeatAnalysis(sessionId: string, filter?: TimeFilter): Repea
       id: number
       senderId: number
       content: string
+      ts: number
       platformId: string
       name: string
     }>
@@ -802,17 +806,23 @@ export function getRepeatAnalysis(sessionId: string, filter?: TimeFilter): Repea
     // 复读链长度统计
     const chainLengthCount = new Map<number, number>() // length -> count
 
-    // 热门复读内容统计（记录最长链的原创者）
-    const contentStats = new Map<string, { count: number; maxChainLength: number; originatorId: number }>()
+    // 热门复读内容统计（记录最长链的原创者和最近时间戳）
+    const contentStats = new Map<
+      string,
+      { count: number; maxChainLength: number; originatorId: number; lastTs: number }
+    >()
 
     // 滑动窗口算法
     let currentContent: string | null = null
-    let repeatChain: Array<{ senderId: number; content: string }> = []
+    let repeatChain: Array<{ senderId: number; content: string; ts: number }> = []
     let totalRepeatChains = 0
     let totalChainLength = 0 // 用于计算平均长度
 
     // 处理复读链的辅助函数（至少3人参与才算复读）
-    const processRepeatChain = (chain: Array<{ senderId: number; content: string }>, breakerId?: number) => {
+    const processRepeatChain = (
+      chain: Array<{ senderId: number; content: string; ts: number }>,
+      breakerId?: number
+    ) => {
       if (chain.length < 3) return
 
       totalRepeatChains++
@@ -835,18 +845,21 @@ export function getRepeatAnalysis(sessionId: string, filter?: TimeFilter): Repea
       // 复读链长度统计
       chainLengthCount.set(chainLength, (chainLengthCount.get(chainLength) || 0) + 1)
 
-      // 热门复读内容统计（记录最长链的原创者）
+      // 热门复读内容统计（记录最长链的原创者和时间戳）
       const content = chain[0].content
+      const chainTs = chain[0].ts // 复读链的时间戳（原创者发消息的时间）
       const existing = contentStats.get(content)
       if (existing) {
         existing.count++
+        // 更新最近时间戳
+        existing.lastTs = Math.max(existing.lastTs, chainTs)
         // 如果当前链更长，更新最长链信息和原创者
         if (chainLength > existing.maxChainLength) {
           existing.maxChainLength = chainLength
           existing.originatorId = originatorId
         }
       } else {
-        contentStats.set(content, { count: 1, maxChainLength: chainLength, originatorId })
+        contentStats.set(content, { count: 1, maxChainLength: chainLength, originatorId, lastTs: chainTs })
       }
     }
 
@@ -866,7 +879,7 @@ export function getRepeatAnalysis(sessionId: string, filter?: TimeFilter): Repea
         const lastSender = repeatChain[repeatChain.length - 1]?.senderId
         if (lastSender !== msg.senderId) {
           // 不同人发的相同内容，延续复读链
-          repeatChain.push({ senderId: msg.senderId, content })
+          repeatChain.push({ senderId: msg.senderId, content, ts: msg.ts })
         }
         // 同一人连续发相同内容，忽略（不算复读）
       } else {
@@ -875,7 +888,7 @@ export function getRepeatAnalysis(sessionId: string, filter?: TimeFilter): Repea
 
         // 开始新链
         currentContent = content
-        repeatChain = [{ senderId: msg.senderId, content }]
+        repeatChain = [{ senderId: msg.senderId, content, ts: msg.ts }]
       }
     }
 
@@ -937,6 +950,7 @@ export function getRepeatAnalysis(sessionId: string, filter?: TimeFilter): Repea
         count: stats.count,
         maxChainLength: stats.maxChainLength,
         originatorName: originatorInfo?.name || '未知',
+        lastTs: stats.lastTs,
       })
     }
     // 按最长复读链长度降序排序
@@ -955,6 +969,101 @@ export function getRepeatAnalysis(sessionId: string, filter?: TimeFilter): Repea
       avgChainLength: totalRepeatChains > 0 ? Math.round((totalChainLength / totalRepeatChains) * 100) / 100 : 0,
       totalRepeatChains,
     }
+  } finally {
+    db.close()
+  }
+}
+
+/**
+ * 获取口头禅分析数据
+ * 统计每个成员最常说的内容（前5个）
+ * - 排除：系统消息、空消息、图片消息
+ * - 排除：过短的内容（少于2个字符）
+ */
+export function getCatchphraseAnalysis(sessionId: string, filter?: TimeFilter): CatchphraseAnalysis {
+  const db = openDatabase(sessionId)
+  if (!db) {
+    return { members: [] }
+  }
+
+  try {
+    const { clause, params } = buildTimeFilter(filter)
+
+    // 构建查询条件：排除系统消息、空消息、图片，且内容长度 >= 2
+    let whereClause = clause
+    if (whereClause.includes('WHERE')) {
+      whereClause +=
+        " AND m.name != '系统消息' AND msg.type = 0 AND msg.content IS NOT NULL AND LENGTH(TRIM(msg.content)) >= 2"
+    } else {
+      whereClause =
+        " WHERE m.name != '系统消息' AND msg.type = 0 AND msg.content IS NOT NULL AND LENGTH(TRIM(msg.content)) >= 2"
+    }
+
+    // 获取每个成员的发言内容及出现次数
+    const rows = db
+      .prepare(
+        `
+        SELECT
+          m.id as memberId,
+          m.platform_id as platformId,
+          m.name,
+          TRIM(msg.content) as content,
+          COUNT(*) as count
+        FROM message msg
+        JOIN member m ON msg.sender_id = m.id
+        ${whereClause}
+        GROUP BY m.id, TRIM(msg.content)
+        ORDER BY m.id, count DESC
+      `
+      )
+      .all(...params) as Array<{
+      memberId: number
+      platformId: string
+      name: string
+      content: string
+      count: number
+    }>
+
+    // 按成员分组，取每个成员的前3个口头禅
+    const memberMap = new Map<
+      number,
+      {
+        memberId: number
+        platformId: string
+        name: string
+        catchphrases: Array<{ content: string; count: number }>
+      }
+    >()
+
+    for (const row of rows) {
+      if (!memberMap.has(row.memberId)) {
+        memberMap.set(row.memberId, {
+          memberId: row.memberId,
+          platformId: row.platformId,
+          name: row.name,
+          catchphrases: [],
+        })
+      }
+
+      const member = memberMap.get(row.memberId)!
+      // 只保留前5个
+      if (member.catchphrases.length < 5) {
+        member.catchphrases.push({
+          content: row.content,
+          count: row.count,
+        })
+      }
+    }
+
+    // 按发言总次数排序（口头禅出现次数总和）
+    const members = Array.from(memberMap.values())
+    members.sort((a, b) => {
+      const aTotal = a.catchphrases.reduce((sum, c) => sum + c.count, 0)
+      const bTotal = b.catchphrases.reduce((sum, c) => sum + c.count, 0)
+      return bTotal - aTotal
+    })
+
+    return { members }
   } finally {
     db.close()
   }

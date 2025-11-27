@@ -9,6 +9,7 @@ import type {
   MessageType,
   ImportProgress,
   RepeatAnalysis,
+  CatchphraseAnalysis,
 } from '../../src/types/chat'
 
 // Custom APIs for renderer
@@ -159,6 +160,16 @@ const chatApi = {
    */
   getRepeatAnalysis: (sessionId: string, filter?: { startTs?: number; endTs?: number }): Promise<RepeatAnalysis> => {
     return ipcRenderer.invoke('chat:getRepeatAnalysis', sessionId, filter)
+  },
+
+  /**
+   * 获取口头禅分析数据
+   */
+  getCatchphraseAnalysis: (
+    sessionId: string,
+    filter?: { startTs?: number; endTs?: number }
+  ): Promise<CatchphraseAnalysis> => {
+    return ipcRenderer.invoke('chat:getCatchphraseAnalysis', sessionId, filter)
   },
 }
 

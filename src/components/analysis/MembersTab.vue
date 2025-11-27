@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { MemberActivity, MemberNameHistory, RepeatAnalysis } from '@/types/chat'
+import type { MemberActivity, MemberNameHistory, RepeatAnalysis, CatchphraseAnalysis } from '@/types/chat'
 import { MemberRankList, BarChart } from '@/components/charts'
 import type { MemberRankItem, BarChartData } from '@/components/charts'
 
@@ -25,7 +25,8 @@ const repeatRankMode = ref<'count' | 'rate'>('rate')
 // 转换复读数据为排行榜格式（绝对次数）
 const originatorRankData = computed<MemberRankItem[]>(() => {
   if (!repeatAnalysis.value) return []
-  const data = repeatRankMode.value === 'count' ? repeatAnalysis.value.originators : repeatAnalysis.value.originatorRates
+  const data =
+    repeatRankMode.value === 'count' ? repeatAnalysis.value.originators : repeatAnalysis.value.originatorRates
   return data.slice(0, 10).map((m) => ({
     id: m.memberId.toString(),
     name: m.name,
@@ -84,6 +85,33 @@ async function loadRepeatAnalysis() {
 function truncateContent(content: string, maxLength = 30): string {
   if (content.length <= maxLength) return content
   return content.slice(0, maxLength) + '...'
+}
+
+// 格式化日期
+function formatDate(ts: number): string {
+  const date = new Date(ts * 1000)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+// ==================== 口头禅分析 ====================
+const catchphraseAnalysis = ref<CatchphraseAnalysis | null>(null)
+const isLoadingCatchphrase = ref(false)
+
+// 加载口头禅分析数据
+async function loadCatchphraseAnalysis() {
+  if (!props.sessionId) return
+
+  isLoadingCatchphrase.value = true
+  try {
+    catchphraseAnalysis.value = await window.chatApi.getCatchphraseAnalysis(props.sessionId, props.timeFilter)
+  } catch (error) {
+    console.error('加载口头禅分析失败:', error)
+  } finally {
+    isLoadingCatchphrase.value = false
+  }
 }
 
 // Top 10 排行榜数据
@@ -162,11 +190,12 @@ watch(
   { immediate: true }
 )
 
-// 监听 sessionId 和 timeFilter 变化，重新加载复读分析
+// 监听 sessionId 和 timeFilter 变化，重新加载复读分析和口头禅分析
 watch(
   () => [props.sessionId, props.timeFilter],
   () => {
     loadRepeatAnalysis()
+    loadCatchphraseAnalysis()
   },
   { immediate: true, deep: true }
 )
@@ -327,11 +356,7 @@ function formatPeriod(startTs: number, endTs: number | null): string {
               <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">每次复读有多少人参与</p>
             </div>
             <div class="p-4">
-              <BarChart
-                v-if="chainLengthChartData.labels.length > 0"
-                :data="chainLengthChartData"
-                :height="200"
-              />
+              <BarChart v-if="chainLengthChartData.labels.length > 0" :data="chainLengthChartData" :height="200" />
               <div v-else class="py-6 text-center text-sm text-gray-400">暂无数据</div>
             </div>
           </div>
@@ -369,7 +394,11 @@ function formatPeriod(startTs: number, endTs: number | null): string {
                     {{ truncateContent(item.content) }}
                   </span>
                 </div>
-                <span class="shrink-0 text-xs text-gray-500">{{ item.count }} 次</span>
+                <div class="flex shrink-0 items-center gap-2 text-xs text-gray-500">
+                  <span>{{ item.count }} 次</span>
+                  <span class="text-gray-300 dark:text-gray-600">|</span>
+                  <span>{{ formatDate(item.lastTs) }}</span>
+                </div>
               </div>
             </div>
             <div v-else class="px-4 py-6 text-center text-sm text-gray-400">暂无数据</div>
@@ -429,6 +458,69 @@ function formatPeriod(startTs: number, endTs: number | null): string {
       </div>
 
       <div v-else class="px-5 py-8 text-center text-sm text-gray-400">该群组暂无复读记录</div>
+    </div>
+
+    <!-- 口头禅分析模块 -->
+    <div class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+      <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-800">
+        <h3 class="font-semibold text-gray-900 dark:text-white">💬 口头禅分析</h3>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          {{
+            isLoadingCatchphrase
+              ? '加载中...'
+              : catchphraseAnalysis
+                ? `分析了 ${catchphraseAnalysis.members.length} 位成员的高频发言`
+                : '暂无数据'
+          }}
+        </p>
+      </div>
+
+      <div v-if="isLoadingCatchphrase" class="px-5 py-8 text-center text-sm text-gray-400">正在分析口头禅数据...</div>
+
+      <div
+        v-else-if="catchphraseAnalysis && catchphraseAnalysis.members.length > 0"
+        class="divide-y divide-gray-100 dark:divide-gray-800"
+      >
+        <div
+          v-for="member in catchphraseAnalysis.members.slice(0, 20)"
+          :key="member.memberId"
+          class="flex items-start gap-4 px-5 py-4"
+        >
+          <!-- 成员名称 -->
+          <div class="w-28 shrink-0 pt-1 font-medium text-gray-900 dark:text-white">
+            {{ member.name }}
+          </div>
+
+          <!-- 口头禅列表 -->
+          <div class="flex flex-1 flex-wrap items-center gap-2">
+            <div
+              v-for="(phrase, index) in member.catchphrases"
+              :key="index"
+              class="flex items-center gap-1.5 rounded-lg px-3 py-1.5"
+              :class="
+                index === 0
+                  ? 'bg-amber-50 dark:bg-amber-900/20'
+                  : index === 1
+                    ? 'bg-gray-100 dark:bg-gray-800'
+                    : 'bg-gray-50 dark:bg-gray-800/50'
+              "
+            >
+              <span
+                class="text-sm"
+                :class="
+                  index === 0 ? 'font-medium text-amber-700 dark:text-amber-400' : 'text-gray-700 dark:text-gray-300'
+                "
+                :title="phrase.content"
+              >
+                {{ truncateContent(phrase.content, 20) }}
+              </span>
+              <span class="text-xs text-gray-400">{{ phrase.count }}次</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-else class="px-5 py-8 text-center text-sm text-gray-400">暂无口头禅数据</div>
     </div>
   </div>
 </template>

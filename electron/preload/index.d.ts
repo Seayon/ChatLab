@@ -8,6 +8,7 @@ import type {
   MessageType,
   ImportProgress,
   RepeatAnalysis,
+  CatchphraseAnalysis,
 } from '../../src/types/chat'
 
 interface TimeFilter {
@@ -35,6 +36,7 @@ interface ChatApi {
   getSupportedFormats: () => Promise<Array<{ name: string; platform: string }>>
   onImportProgress: (callback: (progress: ImportProgress) => void) => () => void
   getRepeatAnalysis: (sessionId: string, filter?: TimeFilter) => Promise<RepeatAnalysis>
+  getCatchphraseAnalysis: (sessionId: string, filter?: TimeFilter) => Promise<CatchphraseAnalysis>
 }
 
 interface Api {

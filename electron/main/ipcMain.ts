@@ -375,6 +375,21 @@ const mainIpcMain = (win: BrowserWindow) => {
       }
     }
   )
+
+  /**
+   * 获取口头禅分析数据
+   */
+  ipcMain.handle(
+    'chat:getCatchphraseAnalysis',
+    async (_, sessionId: string, filter?: { startTs?: number; endTs?: number }) => {
+      try {
+        return database.getCatchphraseAnalysis(sessionId, filter)
+      } catch (error) {
+        console.error('获取口头禅分析失败：', error)
+        return { members: [] }
+      }
+    }
+  )
 }
 
 export default mainIpcMain
