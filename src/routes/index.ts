@@ -4,8 +4,13 @@ export const router = createRouter({
   routes: [
     {
       path: '/',
-      name: 'index',
+      name: 'home',
       component: () => import('@/pages/index.vue'),
+    },
+    {
+      path: '/chat/:id',
+      name: 'chat',
+      component: () => import('@/pages/chat.vue'),
     },
   ],
   history: createWebHashHistory(),

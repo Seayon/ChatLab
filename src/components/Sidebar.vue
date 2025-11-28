@@ -2,6 +2,7 @@
 import { useChatStore } from '@/stores/chat'
 import { storeToRefs } from 'pinia'
 import { ref, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
@@ -11,7 +12,9 @@ dayjs.extend(relativeTime)
 dayjs.locale('zh-cn')
 
 const chatStore = useChatStore()
-const { sessions, currentSessionId } = storeToRefs(chatStore)
+const { sessions } = storeToRefs(chatStore)
+const router = useRouter()
+const route = useRoute()
 
 const isCollapsed = ref(false)
 const deleteConfirmId = ref<string | null>(null)
@@ -26,8 +29,8 @@ function toggleSidebar() {
 }
 
 function handleImport() {
-  // 清空当前会话选择，回到欢迎页（不触发导入弹窗）
-  chatStore.clearSelection()
+  // Navigate to home (Welcome Guide)
+  router.push('/')
 }
 
 function formatTime(timestamp: number): string {
@@ -91,7 +94,7 @@ function cancelDelete() {
 
       <div class="space-y-1">
         <div v-if="!isCollapsed && sessions.length > 0" class="mb-2 px-2 text-xs font-medium text-gray-500">
-          分析记录
+          聊天记录
         </div>
 
         <div
@@ -99,18 +102,18 @@ function cancelDelete() {
           :key="session.id"
           class="group relative flex w-full items-center rounded-full p-2 text-left transition-colors"
           :class="[
-            currentSessionId === session.id && !isCollapsed
+            route.params.id === session.id && !isCollapsed
               ? 'bg-primary-100 text-gray-900 dark:bg-primary-900/30 dark:text-primary-100'
               : 'text-gray-700 dark:text-gray-200 hover:bg-gray-200/60 dark:hover:bg-gray-800',
             isCollapsed ? 'justify-center cursor-pointer' : 'cursor-pointer',
           ]"
-          @click="chatStore.selectSession(session.id)"
+          @click="router.push({ name: 'chat', params: { id: session.id } })"
         >
           <!-- Platform Icon / Text Avatar -->
           <div
             class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold"
             :class="[
-              currentSessionId === session.id
+              route.params.id === session.id
                 ? 'bg-primary-600 text-white dark:bg-primary-500 dark:text-white'
                 : 'bg-gray-400 text-white dark:bg-gray-600 dark:text-white',
               isCollapsed ? '' : 'mr-3',
@@ -144,7 +147,7 @@ function cancelDelete() {
               </template>
               <template #content>
                 <div class="p-3">
-                  <p class="mb-3 text-sm">确定删除此分析记录？</p>
+                  <p class="mb-3 text-sm">确定删除此记录？</p>
                   <div class="flex justify-end gap-2">
                     <UButton size="xs" color="red" @click="handleDelete(session.id)">确定删除</UButton>
                   </div>

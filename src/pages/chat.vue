@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useChatStore } from '@/stores/chat'
 import { storeToRefs } from 'pinia'
 import type { AnalysisSession, MemberActivity, HourlyActivity, DailyActivity, MessageType } from '@/types/chat'
 import UITabs from '@/components/UI/Tabs.vue'
-import OverviewTab from './analysis/OverviewTab.vue'
-import MembersTab from './analysis/MembersTab.vue'
-import TimeTab from './analysis/TimeTab.vue'
-import TimelineTab from './analysis/TimelineTab.vue'
+import OverviewTab from '@/components/analysis/OverviewTab.vue'
+import MembersTab from '@/components/analysis/MembersTab.vue'
+import TimeTab from '@/components/analysis/TimeTab.vue'
+import TimelineTab from '@/components/analysis/TimelineTab.vue'
 
+const route = useRoute()
+const router = useRouter()
 const chatStore = useChatStore()
 const { currentSessionId } = storeToRefs(chatStore)
 
@@ -76,6 +79,18 @@ const filteredMemberCount = computed(() => {
   return memberActivity.value.filter((m) => m.messageCount > 0).length
 })
 
+// Sync route param to store
+function syncSession() {
+  const id = route.params.id as string
+  if (id) {
+    chatStore.selectSession(id)
+    // If selection failed (e.g. invalid ID), redirect to home
+    if (chatStore.currentSessionId !== id) {
+      router.replace('/')
+    }
+  }
+}
+
 // 加载基础数据（不受年份筛选影响）
 async function loadBaseData() {
   if (!currentSessionId.value) return
@@ -137,7 +152,15 @@ async function loadData() {
   isInitialLoad.value = false
 }
 
-// 监听会话变化
+// 监听路由参数变化
+watch(
+  () => route.params.id,
+  () => {
+    syncSession()
+  }
+)
+
+// 监听会话变化 (syncSession 会触发 currentSessionId 变化)
 watch(
   currentSessionId,
   () => {
@@ -154,7 +177,10 @@ watch(selectedYear, () => {
   loadAnalysisData()
 })
 
-onMounted(loadData)
+onMounted(() => {
+  syncSession()
+  // loadData is triggered by currentSessionId watch
+})
 </script>
 
 <template>

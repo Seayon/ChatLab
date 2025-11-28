@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useChatStore } from '@/stores/chat'
+import { storeToRefs } from 'pinia'
+import { useRoute } from 'vue-router'
+import Sidebar from '@/components/Sidebar.vue'
 
 const chatStore = useChatStore()
+const { isInitialized } = storeToRefs(chatStore)
+const route = useRoute()
 
 // 应用启动时从数据库加载会话列表
 onMounted(async () => {
@@ -12,6 +17,44 @@ onMounted(async () => {
 
 <template>
   <UApp>
-    <router-view />
+    <div class="flex h-screen w-full overflow-hidden bg-white dark:bg-gray-950">
+      <template v-if="!isInitialized">
+        <div class="flex h-full w-full items-center justify-center">
+          <div class="text-center">
+            <UIcon name="i-heroicons-arrow-path" class="h-8 w-8 animate-spin text-pink-500" />
+            <p class="mt-2 text-sm text-gray-500">加载中...</p>
+          </div>
+        </div>
+      </template>
+      <template v-else>
+        <Sidebar />
+        <main class="flex-1 overflow-hidden">
+          <router-view v-slot="{ Component }">
+            <Transition name="page-fade" mode="out-in">
+              <component :is="Component" :key="route.fullPath" />
+            </Transition>
+          </router-view>
+        </main>
+      </template>
+    </div>
   </UApp>
 </template>
+
+<style scoped>
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.page-fade-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.page-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+</style>
