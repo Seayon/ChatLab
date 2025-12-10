@@ -8,7 +8,10 @@ import { formatDateRange } from '@/utils'
 import UITabs from '@/components/UI/Tabs.vue'
 import PrivateOverviewTab from '@/components/analysis/PrivateOverviewTab.vue'
 import PrivateTimelineTab from '@/components/analysis/PrivateTimelineTab.vue'
+import PrivateQuotesTab from '@/components/analysis/PrivateQuotesTab.vue'
+import PrivateMemberTab from '@/components/analysis/PrivateMemberTab.vue'
 import AITab from '@/components/analysis/AITab.vue'
+import SQLLabTab from '@/components/analysis/SQLLabTab.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -29,11 +32,14 @@ const availableYears = ref<number[]>([])
 const selectedYear = ref<number>(0) // 0 表示全部
 const isInitialLoad = ref(true) // 用于跳过初始加载时的 watch 触发，并控制首屏加载状态
 
-// Tab 配置 - 私聊有总览、趋势和 AI
+// Tab 配置 - 私聊有总览、趋势、语录、成员、AI 和 SQL
 const tabs = [
   { id: 'overview', label: '总览', icon: 'i-heroicons-chart-pie' },
   { id: 'timeline', label: '趋势', icon: 'i-heroicons-chart-bar' },
+  { id: 'quotes', label: '语录', icon: 'i-heroicons-chat-bubble-left-right' },
+  { id: 'member', label: '成员', icon: 'i-heroicons-user-group' },
   { id: 'ai', label: 'AI实验室', icon: 'i-heroicons-sparkles' },
+  { id: 'sql', label: 'SQL实验室', icon: 'i-heroicons-command-line' },
 ]
 
 const activeTab = ref((route.query.tab as string) || 'overview')
@@ -292,6 +298,17 @@ onMounted(() => {
               :time-range="timeRange"
               :time-filter="timeFilter"
             />
+            <PrivateQuotesTab
+              v-else-if="activeTab === 'quotes'"
+              :key="'quotes-' + selectedYear"
+              :session-id="currentSessionId!"
+              :time-filter="timeFilter"
+            />
+            <PrivateMemberTab
+              v-else-if="activeTab === 'member'"
+              :key="'member'"
+              :session-id="currentSessionId!"
+            />
             <AITab
               v-else-if="activeTab === 'ai'"
               :key="'ai-' + selectedYear"
@@ -299,6 +316,11 @@ onMounted(() => {
               :session-name="session.name"
               :time-filter="timeFilter"
               chat-type="private"
+            />
+            <SQLLabTab
+              v-else-if="activeTab === 'sql'"
+              :key="'sql-' + selectedYear"
+              :session-id="currentSessionId!"
             />
           </Transition>
         </div>

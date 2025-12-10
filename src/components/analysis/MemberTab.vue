@@ -341,21 +341,9 @@ onMounted(() => {
     <div class="mt-4 flex items-start gap-3 rounded-xl bg-amber-50 p-4 dark:bg-amber-900/20">
       <UIcon name="i-heroicons-exclamation-triangle" class="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
       <div>
-        <p class="text-sm font-medium text-amber-800 dark:text-amber-200">字段说明</p>
-        <ul class="mt-1 list-inside list-disc text-sm text-amber-700 dark:text-amber-300">
-          <li>
-            <strong>账号名称</strong>
-            ：用户的 QQ 原始昵称
-          </li>
-          <li>
-            <strong>群昵称</strong>
-            ：用户在本群的专属备注名称
-          </li>
-          <li>
-            <strong>自定义别名</strong>
-            ：您为用户添加的备注，用于搜索和 AI 分析
-          </li>
-        </ul>
+        <p class="text-sm font-medium text-amber-800 dark:text-amber-200">
+          提示：添加别名可以更好地识别聊天记录中的对话对象，别名将用于搜索和 AI 分析中。
+        </p>
       </div>
     </div>
 
